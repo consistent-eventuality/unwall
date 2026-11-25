@@ -1,0 +1,360 @@
+<title>Unwall Measurement</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Inter+Tight:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: two wide figures (system, then flow over time), then reference sections. Palette and faces follow the Unwall app. */
+:root {
+  --bg: #f3f4ee; --panel: #ffffff; --fg: #171812; --soft: #5c604f; --line: #d2d5c4;
+  --accent: #4f6a10; --accent-wash: rgba(110, 140, 20, .10); --warn: #8a5a12;
+  --display: "Instrument Serif", Georgia, serif;
+  --body: "Inter Tight", ui-sans-serif, system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111210; --panel: #1a1b17; --fg: #f1f0e8; --soft: #a3a697; --line: #30322a;
+    --accent: #dcef78; --accent-wash: rgba(220, 239, 120, .08); --warn: #f2b56b; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111210; --panel: #1a1b17; --fg: #f1f0e8; --soft: #a3a697; --line: #30322a;
+  --accent: #dcef78; --accent-wash: rgba(220, 239, 120, .08); --warn: #f2b56b; color-scheme: dark;
+}
+body {
+  background: var(--bg); color: var(--fg); font: 15px/1.6 var(--body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+main { max-width: 1200px; margin: 0 auto; padding-block: 48px 72px; display: grid; gap: 44px; }
+header { display: grid; gap: 10px; max-width: 70ch; }
+.eyebrow { font: 500 12px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--accent); margin: 0; }
+h1 { font: 400 clamp(40px, 6vw, 64px)/1 var(--display); letter-spacing: -.01em; margin: 0; text-wrap: balance; }
+header p { margin: 0; color: var(--soft); font-size: 17px; }
+.ladder { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.rung { min-width: 0; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); padding: 14px 16px; display: grid; gap: 4px; align-content: start; }
+.rung.done { border-color: var(--accent); }
+.rung .k { font: 500 11px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--soft); }
+.rung .h { font: 600 16px var(--body); }
+.rung .d { color: var(--soft); font-size: 13.5px; }
+.rung .st { font: 500 11.5px var(--mono); color: var(--accent); }
+.rung .st.todo { color: var(--soft); }
+h2.sec { font: 400 32px/1.1 var(--display); margin: 0; }
+figure { margin: 0; display: grid; gap: 14px; }
+.scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 16px; background: var(--panel); }
+svg.sys { display: block; width: 100%; min-width: 980px; height: auto; color: var(--fg); font-family: var(--body); }
+figcaption { color: var(--soft); max-width: 78ch; }
+
+.zone { fill: var(--accent-wash); stroke: var(--line); stroke-dasharray: 6 6; }
+.box { fill: var(--bg); stroke: var(--line); }
+.box-hot { fill: var(--bg); stroke: var(--accent); stroke-width: 1.5; }
+.box-new { fill: var(--bg); stroke: var(--accent); stroke-dasharray: 5 4; stroke-width: 1.3; }
+.chip { fill: var(--panel); stroke: var(--line); }
+.lane { fill: none; stroke: var(--line); }
+.col { stroke: var(--line); stroke-dasharray: 3 5; }
+.hdr { font: 500 11px var(--mono); letter-spacing: .12em; fill: var(--soft); }
+.lane-t { font: 600 12px var(--body); fill: var(--fg); }
+.t { font: 600 13.5px var(--body); fill: var(--fg); }
+.n { font: 500 12px var(--mono); fill: var(--accent); }
+.s { font: 12px var(--body); fill: var(--soft); }
+.m { font: 11.5px var(--mono); fill: var(--fg); }
+.ms { font: 11px var(--mono); fill: var(--soft); }
+.lbl { font: 500 11px var(--body); fill: var(--soft); }
+.lbl-hot { font: 600 11px var(--body); fill: var(--accent); }
+.edge { stroke: var(--soft); stroke-width: 1.3; fill: none; }
+.edge-back { stroke: var(--soft); stroke-width: 1.3; fill: none; stroke-dasharray: 4 3; }
+.edge-hot { stroke: var(--accent); stroke-width: 1.8; fill: none; }
+.ah { fill: var(--soft); }
+.ah-hot { fill: var(--accent); }
+
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 32px; }
+section { min-width: 0; display: grid; gap: 12px; align-content: start; }
+h3 { font: 600 13px var(--mono); letter-spacing: .1em; text-transform: uppercase; margin: 0; }
+ul, ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; }
+li { color: var(--soft); border-top: 1px solid var(--line); padding-top: 10px; }
+li b { color: var(--fg); font-weight: 600; }
+ol.build { counter-reset: s; }
+ol.build li { counter-increment: s; display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 8px; }
+ol.build li::before { content: counter(s); font: 500 12px/1.9 var(--mono); color: var(--accent); }
+code { font: 12.5px var(--mono); color: var(--fg); }
+.tbl { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+th, td { text-align: left; padding: 8px 10px 8px 0; border-top: 1px solid var(--line); vertical-align: top; }
+th { font: 500 11px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--soft); }
+td { color: var(--soft); }
+td:first-child { color: var(--fg); font-family: var(--mono); font-size: 12.5px; white-space: nowrap; }
+.note { color: var(--warn); }
+@media (max-width: 900px) { .ladder { grid-template-columns: repeat(2, minmax(0, 1fr)); } .grid2 { grid-template-columns: 1fr; } }
+@media (max-width: 480px) { .ladder { grid-template-columns: 1fr; } }
+</style>
+
+<main>
+  <header>
+    <p class="eyebrow">Design · in progress</p>
+    <h1>Unwall Measurement</h1>
+    <p>Does a published page get used by AI, cited, and send people to the creator's post? This design measures each step, compares it to a baseline taken before the page exists, and turns the result into a report the creator can show.</p>
+  </header>
+
+  <div class="ladder" aria-label="Three questions the measurement answers">
+    <div class="rung"><span class="k">Step 1</span><span class="h">Is AI using it?</span><span class="d">Crawlers find the page, and AI tools fetch it to answer a real person's question.</span><span class="st todo">Host logs</span></div>
+    <div class="rung"><span class="k">Step 2</span><span class="h">Is AI citing it?</span><span class="d">AI answers list the page or the creator's post as a source, compared with a publish-day baseline.</span><span class="st todo">Weekly question checks</span></div>
+    <div class="rung"><span class="k">Step 3</span><span class="h">Is it sending people?</span><span class="d">People arrive from an AI and go on to the creator's post.</span><span class="st todo">Referrals and redirect</span></div>
+    <div class="rung done"><span class="k">One-time check</span><span class="h">Readable</span><span class="d">AI can answer from the page text alone. Rerun once on real creator videos.</span><span class="st">Passed on samples · 15/15</span></div>
+  </div>
+
+  <figure>
+    <h2 class="sec">System design</h2>
+    <div class="scroll">
+      <svg class="sys" viewBox="0 0 1200 620" role="img" aria-label="Measurement system: on your machine, tracked questions feed a citation runner that queries OpenAI, Perplexity and Claude web search and records cited sources. A daily log sync pulls the public host's access logs and classifies crawler visits, AI user fetches, AI referrals and clicks. Both write to append-only files that feed a results view and a creator report. The public host adds an access log and a redirect from each page to the creator's post.">
+        <defs>
+          <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah" d="M0,0 L10,5 L0,10 z"/></marker>
+          <marker id="ahot" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah-hot" d="M0,0 L10,5 L0,10 z"/></marker>
+        </defs>
+        <text class="hdr" x="30" y="28">CREATOR</text>
+        <text class="hdr" x="215" y="28">YOUR MACHINE</text>
+        <text class="hdr" x="820" y="28">OUTSIDE</text>
+        <rect class="zone" x="200" y="42" width="565" height="565" rx="14"/>
+
+        <!-- Creator -->
+        <rect class="box" x="30" y="490" width="150" height="90" rx="10"/>
+        <text class="t" x="46" y="516">Creator</text>
+        <text class="s" x="46" y="538">gets a report to</text>
+        <text class="s" x="46" y="555">share or pitch with</text>
+
+        <!-- M1 questions -->
+        <rect class="box-new" x="230" y="70" width="505" height="72" rx="10"/>
+        <text class="t" x="248" y="96">Tracked questions</text>
+        <text class="s" x="248" y="118">the page's question plus related ones from the draft, edited at approval</text>
+        <text class="ms" x="248" y="134">3–5 per page · also kept for unpublished comparison videos</text>
+        <line class="edge" x1="482" y1="142" x2="482" y2="168" marker-end="url(#a)"/>
+
+        <!-- M2 runner -->
+        <rect class="box-new" x="230" y="170" width="505" height="80" rx="10"/>
+        <text class="t" x="248" y="196">Citation runner</text>
+        <text class="s" x="248" y="218">baseline at publish, then once a week, same questions every time</text>
+        <text class="s" x="248" y="236">matches sources against the page URL, the post URL, and the creator's name</text>
+        <line class="edge" x1="735" y1="195" x2="818" y2="195" marker-end="url(#a)"/>
+        <text class="lbl" x="777" y="188" text-anchor="middle">questions</text>
+        <line class="edge-back" x1="820" y1="228" x2="737" y2="228" marker-end="url(#a)"/>
+        <text class="lbl" x="777" y="242" text-anchor="middle">answers + sources</text>
+        <path class="edge" d="M230,212 H214 V425 H228" marker-end="url(#a)"/>
+        <text class="lbl" x="208" y="320" text-anchor="end">runs</text>
+
+        <!-- M3 log sync -->
+        <rect class="box-new" x="230" y="280" width="505" height="80" rx="10"/>
+        <text class="t" x="248" y="306">Log sync + classifier</text>
+        <text class="s" x="248" y="328">daily: pulls access logs from every deployment with the Railway CLI</text>
+        <text class="s" x="248" y="346">sorts each request: crawler · AI user fetch · AI referral · click to post · other</text>
+        <line class="edge" x1="482" y1="360" x2="482" y2="388" marker-end="url(#a)"/>
+        <text class="lbl" x="492" y="378">hits</text>
+
+        <!-- M4 store -->
+        <rect class="box" x="230" y="390" width="505" height="70" rx="10"/>
+        <text class="t" x="248" y="414">Measurement store</text>
+        <rect class="chip" x="248" y="424" width="120" height="26" rx="6"/><text class="m" x="308" y="441" text-anchor="middle">runs.jsonl</text>
+        <rect class="chip" x="378" y="424" width="120" height="26" rx="6"/><text class="m" x="438" y="441" text-anchor="middle">hits.jsonl</text>
+        <text class="ms" x="512" y="441">append-only, no database</text>
+        <line class="edge" x1="482" y1="460" x2="482" y2="488" marker-end="url(#a)"/>
+
+        <!-- M5 results -->
+        <rect class="box-new" x="230" y="490" width="505" height="90" rx="10"/>
+        <text class="t" x="248" y="516">Results</text>
+        <text class="s" x="248" y="538">per page in the app: fetches by AI, citations by engine and week, clicks</text>
+        <text class="s" x="248" y="556">always shown next to the baseline and the comparison videos</text>
+        <line class="edge" x1="230" y1="535" x2="182" y2="535" marker-end="url(#a)"/>
+        <text class="lbl" x="206" y="527" text-anchor="middle">report</text>
+
+        <!-- O1 engines -->
+        <rect class="box" x="820" y="160" width="350" height="100" rx="10"/>
+        <text class="t" x="838" y="186">AI engine APIs with web search</text>
+        <text class="m" x="838" y="208">OpenAI web search</text>
+        <text class="m" x="838" y="226">Perplexity Sonar</text>
+        <text class="m" x="838" y="244">Claude web search</text>
+        <text class="ms" x="1010" y="208">answer</text>
+        <text class="ms" x="1010" y="226">+ cited URLs</text>
+
+        <!-- O2 host -->
+        <rect class="box-hot" x="820" y="290" width="350" height="110" rx="10"/>
+        <text class="t" x="838" y="316">Public host (Caddy)</text>
+        <text class="s" x="838" y="338">adds a JSON access log line for every request</text>
+        <text class="m" x="838" y="362">/go/&lt;slug&gt; → 302 to the post</text>
+        <text class="ms" x="838" y="384">"Watch the original" points here</text>
+        <line class="edge-hot" x1="820" y1="320" x2="737" y2="320" marker-end="url(#ahot)"/>
+        <text class="lbl-hot" x="777" y="312" text-anchor="middle">logs</text>
+
+        <!-- O3 people, O4 bots -->
+        <rect class="box" x="820" y="430" width="165" height="70" rx="10"/>
+        <text class="t" x="836" y="456">Person in an AI app</text>
+        <text class="s" x="836" y="476">clicks a cited link,</text>
+        <text class="s" x="836" y="492">then the original</text>
+        <rect class="box" x="1005" y="430" width="165" height="70" rx="10"/>
+        <text class="t" x="1021" y="456">Bots</text>
+        <text class="s" x="1021" y="476">crawlers and AI</text>
+        <text class="s" x="1021" y="492">fetchers</text>
+        <line class="edge" x1="902" y1="430" x2="902" y2="402" marker-end="url(#a)"/>
+        <text class="lbl" x="910" y="420">visits</text>
+        <line class="edge" x1="1087" y1="430" x2="1087" y2="402" marker-end="url(#a)"/>
+        <text class="lbl" x="1095" y="420">crawl · fetch</text>
+
+        <!-- O5 post -->
+        <rect class="box" x="820" y="530" width="350" height="60" rx="10"/>
+        <text class="t" x="838" y="556">Creator's post</text>
+        <text class="s" x="838" y="576">Instagram · TikTok</text>
+        <path class="edge-hot" d="M1170,345 H1186 V560 H1172" marker-end="url(#ahot)"/>
+        <text class="lbl-hot" x="1180" y="518" text-anchor="end">302</text>
+
+        <text class="ms" x="215" y="600">dashed outline = new component</text>
+      </svg>
+    </div>
+    <figcaption>Two independent sources of evidence. The citation runner asks the engines directly and records which sources they cite. The host logs show what actually happened in the wild: which bots came, which AI tools fetched the page for a person's question, and who clicked through to the post. Nothing new runs on the public host except logging and one redirect.</figcaption>
+  </figure>
+
+  <figure>
+    <h2 class="sec">Functional flow</h2>
+    <div class="scroll">
+      <svg class="sys" viewBox="0 0 1200 500" role="img" aria-label="Flow over four weeks: on publish day the creator approves the page and its questions, Unwall runs a baseline, and the page goes live. Every day crawlers visit, people ask AI tools, the tools fetch the page, people click through to the post, the host logs it all, and Unwall syncs and classifies the logs. Every week Unwall reruns the same questions. After four weeks Unwall reports to the creator.">
+        <defs>
+          <marker id="b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah" d="M0,0 L10,5 L0,10 z"/></marker>
+          <marker id="bhot" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah-hot" d="M0,0 L10,5 L0,10 z"/></marker>
+        </defs>
+        <text class="hdr" x="270" y="24" text-anchor="middle">PUBLISH DAY</text>
+        <text class="hdr" x="582" y="24" text-anchor="middle">EVERY DAY</text>
+        <text class="hdr" x="915" y="24" text-anchor="middle">EVERY WEEK</text>
+        <text class="hdr" x="1097" y="24" text-anchor="middle">AFTER 4 WEEKS</text>
+
+        <rect class="lane" x="20" y="40" width="1165" height="445" rx="10"/>
+        <line class="lane" x1="20" y1="125" x2="1185" y2="125"/>
+        <line class="lane" x1="20" y1="215" x2="1185" y2="215"/>
+        <line class="lane" x1="20" y1="305" x2="1185" y2="305"/>
+        <line class="lane" x1="20" y1="395" x2="1185" y2="395"/>
+        <line class="col" x1="385" y1="40" x2="385" y2="485"/>
+        <line class="col" x1="812" y1="40" x2="812" y2="485"/>
+        <line class="col" x1="1005" y1="40" x2="1005" y2="485"/>
+        <text class="lane-t" x="34" y="87">Creator</text>
+        <text class="lane-t" x="34" y="175">Unwall</text>
+        <text class="lane-t" x="34" y="265">AI engines</text>
+        <text class="lane-t" x="34" y="355">Person</text>
+        <text class="lane-t" x="34" y="445">Public host</text>
+
+        <!-- Publish day -->
+        <rect class="box" x="170" y="55" width="200" height="56" rx="8"/>
+        <text class="n" x="184" y="78">1</text><text class="t" x="200" y="78">Approve page</text>
+        <text class="s" x="184" y="98">and the questions to track</text>
+        <line class="edge" x1="270" y1="111" x2="270" y2="138" marker-end="url(#b)"/>
+        <rect class="box-hot" x="170" y="140" width="200" height="60" rx="8"/>
+        <text class="n" x="184" y="163">2</text><text class="t" x="200" y="163">Baseline run</text>
+        <text class="s" x="184" y="183">before anything is indexed</text>
+        <line class="edge" x1="240" y1="200" x2="240" y2="228" marker-end="url(#b)"/>
+        <text class="lbl" x="232" y="218" text-anchor="end">asks</text>
+        <rect class="box" x="170" y="230" width="200" height="60" rx="8"/>
+        <text class="t" x="184" y="253">Engines answer</text>
+        <text class="s" x="184" y="273">cited sources recorded</text>
+        <line class="edge-back" x1="320" y1="230" x2="320" y2="202" marker-end="url(#b)"/>
+        <text class="lbl" x="328" y="220">sources</text>
+        <rect class="box" x="170" y="410" width="200" height="60" rx="8"/>
+        <text class="n" x="184" y="433">3</text><text class="t" x="200" y="433">Page goes live</text>
+        <text class="s" x="184" y="453">submitted to IndexNow</text>
+
+        <!-- Every day -->
+        <rect class="box" x="410" y="230" width="170" height="60" rx="8"/>
+        <text class="n" x="424" y="253">4</text><text class="t" x="440" y="253">Crawlers visit</text>
+        <text class="s" x="424" y="273">OAI-SearchBot, Bingbot</text>
+        <path class="edge" d="M420,290 V298 H396 V408" marker-end="url(#b)"/>
+        <rect class="box" x="410" y="320" width="170" height="60" rx="8"/>
+        <text class="n" x="424" y="343">5</text><text class="t" x="440" y="343">Asks an AI</text>
+        <text class="s" x="424" y="363">a question the page answers</text>
+        <path class="edge" d="M560,320 V300 H640 V292" marker-end="url(#b)"/>
+        <rect class="box-hot" x="595" y="230" width="160" height="60" rx="8"/>
+        <text class="n" x="609" y="253">6</text><text class="t" x="625" y="253">AI fetches page</text>
+        <text class="s" x="609" y="273">ChatGPT-User, Claude-User</text>
+        <path class="edge-hot" d="M755,260 H772 V440 H757" marker-end="url(#bhot)"/>
+        <rect class="box-hot" x="595" y="320" width="160" height="60" rx="8"/>
+        <text class="n" x="609" y="343">7</text><text class="t" x="625" y="343">Clicks through</text>
+        <text class="s" x="609" y="363">page, then the original</text>
+        <line class="edge-hot" x1="675" y1="380" x2="675" y2="408" marker-end="url(#bhot)"/>
+        <rect class="box" x="410" y="410" width="345" height="60" rx="8"/>
+        <text class="t" x="424" y="433">Host logs every request</text>
+        <text class="s" x="424" y="453">crawl · user fetch · referral · /go click, then 302 to the post</text>
+        <rect class="box" x="410" y="140" width="345" height="60" rx="8"/>
+        <text class="n" x="424" y="163">8</text><text class="t" x="440" y="163">Daily log sync</text>
+        <text class="s" x="424" y="183">classify by user agent, confirm bots by published IP range</text>
+        <path class="edge" d="M757,455 H794 V170 H757" marker-end="url(#b)"/>
+        <text class="lbl" x="798" y="300">logs</text>
+
+        <!-- Every week -->
+        <rect class="box-hot" x="830" y="140" width="165" height="60" rx="8"/>
+        <text class="n" x="844" y="163">9</text><text class="t" x="860" y="163">Weekly run</text>
+        <text class="s" x="844" y="183">same questions as baseline</text>
+        <line class="edge" x1="880" y1="200" x2="880" y2="228" marker-end="url(#b)"/>
+        <text class="lbl" x="872" y="218" text-anchor="end">asks</text>
+        <rect class="box" x="830" y="230" width="165" height="60" rx="8"/>
+        <text class="t" x="844" y="253">Engines answer</text>
+        <text class="s" x="844" y="273">cited? creator named?</text>
+        <line class="edge-back" x1="950" y1="230" x2="950" y2="202" marker-end="url(#b)"/>
+        <text class="lbl" x="958" y="220">sources</text>
+
+        <!-- After 4 weeks -->
+        <line class="edge" x1="995" y1="170" x2="1013" y2="170" marker-end="url(#b)"/>
+        <rect class="box-hot" x="1015" y="140" width="160" height="60" rx="8"/>
+        <text class="n" x="1029" y="163">10</text><text class="t" x="1051" y="163">Report</text>
+        <text class="s" x="1029" y="183">per page, per week</text>
+        <line class="edge" x1="1095" y1="140" x2="1095" y2="113" marker-end="url(#b)"/>
+        <rect class="box" x="1015" y="55" width="160" height="56" rx="8"/>
+        <text class="t" x="1029" y="78">Creator sees credit</text>
+        <text class="s" x="1029" y="98">fetches, citations, clicks</text>
+      </svg>
+    </div>
+    <figcaption>The highlighted path is the evidence that matters most. An AI tool fetching the page for someone's question (step 6) and that person clicking through to the post (step 7) mean the page did its job. Weekly runs (step 9) show whether citations appear and grow against the publish-day baseline.</figcaption>
+  </figure>
+
+  <div class="grid2">
+    <section>
+      <h3>What gets recorded</h3>
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Record</th><th>Fields</th></tr></thead>
+          <tbody>
+            <tr><td>run</td><td>date, engine, question, page, whether the page was cited, whether the post was cited, whether the creator was named, all source URLs</td></tr>
+            <tr><td>hit</td><td>time, page, kind (crawler, AI user fetch, AI referral, click to post, other), bot name, IP confirmed or not, referring AI if known</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <ul>
+        <li><b>Privacy.</b> Visitor IPs are used only to confirm a bot's identity, then dropped. People are counted, not tracked.</li>
+        <li><b>Comparison videos (next).</b> A few similar videos from the same creators tracked without publishing pages. If those get cited just as often, the pages aren't the cause. Not in the first build.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h3>The test and its bar</h3>
+      <ul>
+        <li><b>Size.</b> 3–5 creators, about 5 videos each, 3–5 questions per page, 3 engines, a baseline plus 4 weekly runs. That's roughly 1,500 API calls for the whole test.</li>
+        <li><b>Pass.</b> At least one page is cited by at least one engine where the baseline showed nothing, and AI tools fetch pages for real user questions.</li>
+        <li><b>Strong pass.</b> People click through from an AI to the creator's post.</li>
+        <li><b>Fail.</b> Four weeks of crawls with no fetches and no citations. That's a finding too, and it tells you to change distribution before building more.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h3>Risks and open questions</h3>
+      <ul>
+        <li><b>API answers aren't the consumer apps.</b> ChatGPT, Claude and Perplexity in a browser can cite differently from their APIs, so spot-check a few questions by hand each week.</li>
+        <li><b>Log retention.</b> Railway keeps logs for a limited time that depends on the plan. The daily sync has to run, or that day's data is lost.</li>
+        <li><b>Spoofed bots.</b> Anyone can claim to be ChatGPT-User. Visits count as confirmed only when the IP matches a range the company publishes; otherwise they're labeled unconfirmed.</li>
+        <li><b>Referrals are partial.</b> Some AI apps strip the referrer, so referral counts are a floor, not the true number.</li>
+        <li><b>New domain.</b> A fresh Railway subdomain has no history. A real domain should be in place before publish day.</li>
+        <li class="note"><b>New dependency.</b> Perplexity Sonar needs a new API key. OpenAI and Claude use the keys you already have.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h3>Build order</h3>
+      <ol class="build">
+        <li><span><b>Host evidence.</b> Access logging, the <code>/go</code> redirect, daily sync, and the classifier. No new keys, and it starts collecting data from day one.</span></li>
+        <li><span><b>Citation runner.</b> Questions at approval, baseline at publish, weekly runs on OpenAI and Claude, and Perplexity once there's a key.</span></li>
+        <li><span><b>Results.</b> A results tab per page and a shareable creator report.</span></li>
+      </ol>
+      <ul><li>Each slice ships with a test against local fakes, like Publish live, then one real run before the next slice starts.</li></ul>
+    </section>
+  </div>
+</main>

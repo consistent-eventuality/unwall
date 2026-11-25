@@ -50,11 +50,17 @@ def indexnow_key(data: Path) -> str:
     return path.read_text().strip()
 
 
-def caddyfile(noindex: list[str]) -> str:
+def caddyfile(noindex: list[str], redirects: dict[str, str]) -> str:
     rules = "".join(f'\theader /p/{slug}/* X-Robots-Tag "noindex"\n' for slug in noindex)
-    return ("{\n\tadmin off\n\tauto_https off\n}\n\n:{$PORT:8080} {\n\troot * /srv\n\tfile_server\n"
+    # "Watch the original" goes through /go/<slug> so each click lands in the access log.
+    # Links were checked by render.safe_link, so they can't break out of the quotes.
+    rules += "".join(f'\tredir /go/{slug} "{url}" 302\n' for slug, url in sorted(redirects.items())
+                     if render.safe_link(url))
+    return ("{\n\tadmin off\n\tauto_https off\n}\n\n:{$PORT:8080} {\n\tlog {\n\t\toutput stdout\n\t\tformat json\n\t}\n"
+            "\troot * /srv\n\tfile_server\n"
             '\theader X-Content-Type-Options nosniff\n\theader Cache-Control "public, max-age=60"\n'
             '\theader /p/*/page.md Content-Type "text/markdown; charset=utf-8"\n'
+            '\theader /go/* X-Robots-Tag "noindex"\n'
             f"{rules}}}\n")
 
 
@@ -82,7 +88,8 @@ def build(job: dict, job_dir: Path, live: Path, url: str, key: str, out: Path) -
     (site / "sitemap.xml").write_text(render.sitemap(pages, url), encoding="utf-8")
     (site / f"{key}.txt").write_text(key, encoding="utf-8")
     noindex = [p.parent.name for p in sorted(pages.glob("*/index.html")) if render.is_noindex(p)]
-    (out / "Caddyfile").write_text(caddyfile(noindex), encoding="utf-8")
+    redirects = {p.parent.name: json.loads(p.read_text())["source_url"] for p in sorted(pages.glob("*/claims.json"))}
+    (out / "Caddyfile").write_text(caddyfile(noindex, redirects), encoding="utf-8")
     (out / "Dockerfile").write_text(DOCKERFILE, encoding="utf-8")
     return site
 

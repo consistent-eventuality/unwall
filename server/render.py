@@ -32,6 +32,12 @@ def credit_parts(job: dict) -> list[str]:
 NOINDEX = '<meta name="robots" content="noindex">'
 
 
+def safe_link(url: str) -> bool:
+    """A web link that can sit inside a quoted Caddyfile value without changing its meaning."""
+    return (url.startswith(("http://", "https://")) and len(url) < 2000
+            and not any(ch in url for ch in ' "\'{}\\\n\r\t`'))
+
+
 def is_noindex(page: Path) -> bool:
     return NOINDEX in page.read_text(encoding="utf-8")
 
@@ -96,8 +102,9 @@ time{font:13px/1.9 ui-monospace,monospace;color:var(--soft)}footer{margin-top:30
 
 def page_html(job: dict, url: str, thumb: str) -> str:
     draft, meta = job["draft"], job["meta"]
-    source = escape(meta["source_url"], quote=True)
-    who = f"<b>By {escape(meta['creator'])}</b>"
+    # Visible links go through /go/<slug> so clicks can be counted; structured data keeps the direct URL.
+    source = f"/go/{job['slug']}"
+    who =f"<b>By {escape(meta['creator'])}</b>"
     if meta.get("credential"):
         who += f", {escape(meta['credential'])}"
     parts = credit_parts(job)
@@ -118,6 +125,62 @@ def page_html(job: dict, url: str, thumb: str) -> str:
 <h2>What the video shows</h2><ol>{items}</ol><p>{reason}</p>
 <footer>Reviewed and approved for publication on {escape(job['approved_at'])}. <a href="{source}" rel="noopener">View the source</a>.</footer>
 </article></main></body></html>"""
+
+
+REPORT_CSS = """
+:root{color-scheme:light dark;--bg:#f6f4ec;--ink:#171815;--soft:#62645c;--line:#d9d6ca;--mark:#315c2b;--panel:#fff}
+@media(prefers-color-scheme:dark){:root{--bg:#121310;--ink:#f1efe6;--soft:#a3a498;--line:#2d2f29;--mark:#dcef78;--panel:#1a1b17}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 ui-sans-serif,system-ui,sans-serif}
+main{max-width:760px;margin:auto;padding:48px 20px 64px}h1{font:500 clamp(30px,5vw,42px)/1.1 Georgia,serif;margin:6px 0 10px}
+.eyebrow{font:12px ui-monospace,monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--mark)}.soft{color:var(--soft)}
+.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:28px 0}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px}.stat b{display:block;font:500 34px/1 Georgia,serif;margin:6px 0}
+.stat span{font-size:13px;color:var(--soft)}table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:left;padding:9px 8px 9px 0;border-top:1px solid var(--line);vertical-align:top}
+th{font:12px ui-monospace,monospace;color:var(--soft);font-weight:400}.hit{color:var(--mark);font-weight:650}h2{font-size:15px;margin:34px 0 8px}
+ul{padding-left:18px;color:var(--soft)}a{color:inherit}@media(max-width:560px){.stats{grid-template-columns:1fr}}
+"""
+
+
+def report_html(job: dict, s: dict) -> str:
+    """A plain page a creator can read or screenshot: what AI did with their page."""
+    meta, draft = job["meta"], job["draft"]
+    page_url = (job.get("launch") or {}).get("url") or job.get("url") or ""
+    latest = s["latest"]
+    cited = f"{latest['page_cited']} of {latest['asked']}" if latest else "Not checked yet"
+    base = f"Baseline: {s['baseline']['page_cited']} of {s['baseline']['asked']}" if s["baseline"] else "Baseline pending"
+    referrals = ", ".join(f"{escape(k)} {v}" for k, v in s["referrals"].items()) or "none recorded yet"
+    rows = []
+    for check in s["checks"]:
+        cells = []
+        for engine in ("ChatGPT", "Claude", "Perplexity"):
+            e = check["engines"].get(engine)
+            if not e or not e["asked"]:
+                cells.append("<td class='soft'>—</td>")
+            else:
+                mark = " class='hit'" if e["page_cited"] or e["post_cited"] else ""
+                cells.append(f"<td{mark}>page {e['page_cited']}/{e['asked']}<br><span class='soft'>post {e['post_cited']}</span></td>")
+        rows.append(f"<tr><td><b>{escape(check['label'])}</b><br><span class='soft'>{escape(check['at'][:10])}</span></td>{''.join(cells)}</tr>")
+    table = "".join(rows) or "<tr><td colspan='4' class='soft'>No checks yet.</td></tr>"
+    questions = "".join(f"<li>{escape(q)}</li>" for q in s["questions"])
+    agents = ", ".join(f"{escape(k)} {v['confirmed'] + v['unconfirmable']}" for k, v in s["fetches"]["by_agent"].items()) or "none yet"
+    return f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex"><title>AI report · {escape(meta['creator'])}</title><style>{REPORT_CSS}</style></head><body><main>
+<p class="eyebrow">AI visibility report</p><h1>{escape(draft['question'])}</h1>
+<p class="soft">A page made from {escape(meta['creator'])}'s video, published {escape(job.get('approved_at') or '')}.
+<a href="{escape(page_url, quote=True)}">View the page</a> · <a href="{escape(meta['source_url'], quote=True)}">View the original post</a></p>
+<div class="stats">
+<div class="stat"><span>AI fetched the page for someone's question</span><b>{s['fetches']['trusted']}</b><span>{agents}</span></div>
+<div class="stat"><span>Answers that cited the page (latest check)</span><b>{cited}</b><span>{base}</span></div>
+<div class="stat"><span>Clicks through to the original post</span><b>{s['clicks']}</b><span>Arrived from AI apps: {referrals}</span></div>
+</div>
+<h2>Citation checks</h2><table><thead><tr><th>Check</th><th>ChatGPT</th><th>Claude</th><th>Perplexity</th></tr></thead><tbody>{table}</tbody></table>
+<h2>Questions asked each time</h2><ul>{questions}</ul>
+<h2>How to read this</h2><ul>
+<li>The baseline was taken right after the page went live, before any search index had it. Citations above the baseline are what the page added.</li>
+<li>Each check tells the engine to search first, then records which sources it cites. Answers in the ChatGPT, Claude and Perplexity apps can differ.</li>
+<li>AI fetches count only visits from published IP ranges, or from Claude, which publishes none. Claimed visits from other addresses are left out.</li>
+<li>Some apps hide where a visitor came from, so referral counts are a minimum.</li>
+</ul></main></body></html>"""
 
 
 def publish(job: dict, job_dir: Path, site: Path, base_url: str) -> str:

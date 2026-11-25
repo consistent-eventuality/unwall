@@ -1,0 +1,269 @@
+<title>Unwall System Design</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Inter+Tight:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one wide system figure, then three short reference sections. Palette and faces follow the Unwall app. */
+:root {
+  --bg: #f3f4ee;
+  --panel: #ffffff;
+  --fg: #171812;
+  --soft: #5c604f;
+  --line: #d2d5c4;
+  --accent: #4f6a10;
+  --accent-wash: rgba(110, 140, 20, .10);
+  --display: "Instrument Serif", Georgia, serif;
+  --body: "Inter Tight", ui-sans-serif, system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111210; --panel: #1a1b17; --fg: #f1f0e8; --soft: #a3a697; --line: #30322a;
+    --accent: #dcef78; --accent-wash: rgba(220, 239, 120, .08); color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111210; --panel: #1a1b17; --fg: #f1f0e8; --soft: #a3a697; --line: #30322a;
+  --accent: #dcef78; --accent-wash: rgba(220, 239, 120, .08); color-scheme: dark;
+}
+body {
+  background: var(--bg); color: var(--fg); font: 15px/1.6 var(--body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+main { max-width: 1200px; margin: 0 auto; padding-block: 48px 72px; display: grid; gap: 40px; }
+header { display: grid; gap: 10px; max-width: 68ch; }
+.eyebrow { font: 500 12px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--accent); margin: 0; }
+h1 { font: 400 clamp(40px, 6vw, 64px)/1 var(--display); letter-spacing: -.01em; margin: 0; text-wrap: balance; }
+header p { margin: 0; color: var(--soft); font-size: 17px; }
+figure { margin: 0; display: grid; gap: 14px; }
+.scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 16px; background: var(--panel); }
+svg.sys { display: block; width: 100%; min-width: 960px; height: auto; color: var(--fg); font-family: var(--body); }
+figcaption { color: var(--soft); max-width: 75ch; }
+
+/* Diagram marks, all from tokens so both themes read. */
+.zone { fill: var(--accent-wash); stroke: var(--line); stroke-dasharray: 6 6; }
+.box { fill: var(--bg); stroke: var(--line); }
+.box-hot { fill: var(--bg); stroke: var(--accent); stroke-width: 1.5; }
+.box-local { fill: none; stroke: var(--soft); stroke-dasharray: 4 4; }
+.chip { fill: var(--panel); stroke: var(--line); }
+.chip-hot { fill: var(--panel); stroke: var(--accent); }
+.hdr { font: 500 11px var(--mono); letter-spacing: .12em; fill: var(--soft); }
+.t { font: 600 14px var(--body); fill: var(--fg); }
+.n { font: 500 12px var(--mono); fill: var(--accent); }
+.s { font: 12px var(--body); fill: var(--soft); }
+.m { font: 11.5px var(--mono); fill: var(--fg); }
+.ms { font: 11px var(--mono); fill: var(--soft); }
+.lbl { font: 500 11px var(--body); fill: var(--soft); }
+.lbl-hot { font: 600 11px var(--body); fill: var(--accent); }
+.edge { stroke: var(--soft); stroke-width: 1.3; fill: none; }
+.edge-back { stroke: var(--soft); stroke-width: 1.3; fill: none; stroke-dasharray: 4 3; }
+.edge-hot { stroke: var(--accent); stroke-width: 2; fill: none; }
+.ah { fill: var(--soft); }
+.ah-hot { fill: var(--accent); }
+
+/* Reference sections */
+.grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px; }
+section { min-width: 0; display: grid; gap: 12px; align-content: start; }
+h2 { font: 600 13px var(--mono); letter-spacing: .1em; text-transform: uppercase; margin: 0; color: var(--fg); }
+ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; }
+li { color: var(--soft); border-top: 1px solid var(--line); padding-top: 10px; }
+li b { color: var(--fg); font-weight: 600; }
+code { font: 12.5px var(--mono); color: var(--fg); }
+.states { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.state { font: 12px var(--mono); padding: 3px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); }
+.state.hot { border-color: var(--accent); color: var(--accent); }
+.arrow { color: var(--soft); font-size: 12px; }
+.states-label { font: 500 12px var(--body); color: var(--soft); width: 100%; margin-top: 4px; }
+@media (max-width: 860px) { .grid3 { grid-template-columns: 1fr; } }
+</style>
+
+<main>
+  <header>
+    <p class="eyebrow">System design</p>
+    <h1>Unwall</h1>
+    <p>Turn a video you own into a source page that AI answer engines can read, cite, and link back to. Everything runs on your machine except two model calls and the static pages you approve.</p>
+  </header>
+
+  <figure>
+    <div class="scroll">
+      <svg class="sys" viewBox="0 0 1200 815" role="img" aria-label="Unwall system: a creator's video is split locally, transcribed by OpenAI, drafted by Claude, reviewed and approved by the creator, rendered into three files, then deployed as static files to a Railway host, verified, and submitted to IndexNow. Keys, videos and job data never leave the machine. Crawlers find the pages through robots.txt and the sitemap.">
+        <defs>
+          <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah" d="M0,0 L10,5 L0,10 z"/></marker>
+          <marker id="ahot" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah-hot" d="M0,0 L10,5 L0,10 z"/></marker>
+        </defs>
+
+        <text class="hdr" x="30" y="28">CREATOR</text>
+        <text class="hdr" x="215" y="28">YOUR MACHINE · localhost:8787</text>
+        <text class="hdr" x="820" y="28">OUTSIDE SERVICES</text>
+        <rect class="zone" x="200" y="42" width="565" height="765" rx="14"/>
+
+        <!-- Creator -->
+        <rect class="box" x="30" y="70" width="150" height="300" rx="10"/>
+        <text class="t" x="46" y="98">You</text>
+        <text class="s" x="46" y="122">Drop in a video</text>
+        <text class="s" x="46" y="140">you own.</text>
+        <text class="s" x="46" y="300">Check each claim,</text>
+        <text class="s" x="46" y="318">add the credit line,</text>
+        <text class="s" x="46" y="336">click Publish live.</text>
+        <line class="edge" x1="180" y1="110" x2="228" y2="110" marker-end="url(#a)"/>
+        <text class="lbl" x="204" y="102" text-anchor="middle">video</text>
+        <line class="edge" x1="180" y1="322" x2="228" y2="322" marker-end="url(#a)"/>
+        <text class="lbl" x="204" y="314" text-anchor="middle">approves</text>
+
+        <!-- 1 Read -->
+        <rect class="box" x="230" y="70" width="505" height="70" rx="10"/>
+        <text class="n" x="248" y="96">1</text><text class="t" x="264" y="96">Read</text>
+        <text class="s" x="248" y="120">ffmpeg pulls the audio track and samples 6–24 frames</text>
+        <line class="edge" x1="482" y1="140" x2="482" y2="168" marker-end="url(#a)"/>
+        <text class="lbl" x="492" y="158">transcript + frames</text>
+
+        <!-- 2 Draft -->
+        <rect class="box" x="230" y="170" width="505" height="80" rx="10"/>
+        <text class="n" x="248" y="196">2</text><text class="t" x="264" y="196">Draft</text>
+        <text class="s" x="248" y="218">question, direct answer, claims with start and end times</text>
+        <text class="s" x="248" y="236">each claim tagged spoken · on screen · shown, with its evidence</text>
+        <line class="edge" x1="482" y1="250" x2="482" y2="278" marker-end="url(#a)"/>
+        <text class="lbl" x="492" y="268">draft</text>
+
+        <!-- 3 Review -->
+        <rect class="box" x="230" y="280" width="505" height="85" rx="10"/>
+        <text class="n" x="248" y="306">3</text><text class="t" x="264" y="306">Review</text>
+        <text class="s" x="248" y="328">click a claim to seek the video, edit text, confirm you have the rights</text>
+        <text class="s" x="248" y="346">edits save in order; editing a live page sends it back here</text>
+        <line class="edge" x1="482" y1="365" x2="482" y2="393" marker-end="url(#a)"/>
+        <text class="lbl" x="492" y="383">approved</text>
+
+        <!-- 4 Render -->
+        <rect class="box" x="230" y="395" width="505" height="80" rx="10"/>
+        <text class="n" x="248" y="420">4</text><text class="t" x="264" y="420">Render</text>
+        <rect class="chip" x="248" y="434" width="170" height="28" rx="6"/><text class="m" x="333" y="452" text-anchor="middle">index.html + JSON-LD</text>
+        <rect class="chip" x="428" y="434" width="90" height="28" rx="6"/><text class="m" x="473" y="452" text-anchor="middle">page.md</text>
+        <rect class="chip" x="528" y="434" width="110" height="28" rx="6"/><text class="m" x="583" y="452" text-anchor="middle">claims.json</text>
+        <line class="edge" x1="482" y1="475" x2="482" y2="503" marker-end="url(#a)"/>
+        <text class="lbl" x="492" y="493">pages</text>
+
+        <!-- 5 Publish live -->
+        <rect class="box-hot" x="230" y="505" width="505" height="140" rx="10"/>
+        <text class="n" x="248" y="531">5</text><text class="t" x="264" y="531">Publish live</text>
+        <text class="s" x="248" y="551">one deploy at a time; the whole site ships each time</text>
+        <rect class="chip" x="248" y="566" width="105" height="48" rx="6"/><text class="t" x="300" y="586" text-anchor="middle" style="font-size:12.5px">build</text><text class="ms" x="300" y="603" text-anchor="middle">static bundle</text>
+        <rect class="chip-hot" x="369" y="566" width="105" height="48" rx="6"/><text class="t" x="421" y="586" text-anchor="middle" style="font-size:12.5px">deploy</text><text class="ms" x="421" y="603" text-anchor="middle">railway up</text>
+        <rect class="chip" x="490" y="566" width="105" height="48" rx="6"/><text class="t" x="542" y="586" text-anchor="middle" style="font-size:12.5px">verify</text><text class="ms" x="542" y="603" text-anchor="middle">bytes match</text>
+        <rect class="chip" x="611" y="566" width="105" height="48" rx="6"/><text class="t" x="663" y="586" text-anchor="middle" style="font-size:12.5px">submit</text><text class="ms" x="663" y="603" text-anchor="middle">IndexNow</text>
+        <line class="edge" x1="354" y1="590" x2="367" y2="590" marker-end="url(#a)"/>
+        <line class="edge" x1="475" y1="590" x2="488" y2="590" marker-end="url(#a)"/>
+        <line class="edge" x1="596" y1="590" x2="609" y2="590" marker-end="url(#a)"/>
+        <text class="ms" x="248" y="634">each destination: submitted · open to crawl · skipped · failed</text>
+
+        <!-- Stays local -->
+        <rect class="box-local" x="230" y="670" width="505" height="125" rx="10"/>
+        <text class="t" x="248" y="696">Stays on this machine</text>
+        <text class="s" x="248" y="720">API keys, read from your shell environment</text>
+        <text class="s" x="248" y="740">uploaded videos, transcripts, and frames</text>
+        <text class="s" x="248" y="760">job files in data/jobs (JSON on disk, no database)</text>
+        <text class="s" x="248" y="780">the processing API, which refuses cross-site requests</text>
+
+        <!-- OpenAI -->
+        <rect class="box" x="820" y="70" width="350" height="70" rx="10"/>
+        <text class="t" x="838" y="96">OpenAI · whisper-1</text>
+        <text class="s" x="838" y="120">speech to text with timestamps; silent parts dropped</text>
+        <line class="edge" x1="735" y1="95" x2="818" y2="95" marker-end="url(#a)"/>
+        <text class="lbl" x="777" y="88" text-anchor="middle">audio</text>
+        <line class="edge-back" x1="820" y1="120" x2="737" y2="120" marker-end="url(#a)"/>
+        <text class="lbl" x="777" y="134" text-anchor="middle">transcript</text>
+
+        <!-- Claude -->
+        <rect class="box" x="820" y="170" width="350" height="80" rx="10"/>
+        <text class="t" x="838" y="196">Anthropic · Claude</text>
+        <text class="s" x="838" y="218">reads transcript and frames, returns a typed draft</text>
+        <text class="s" x="838" y="236">text in the video is content, never instructions</text>
+        <line class="edge" x1="735" y1="195" x2="818" y2="195" marker-end="url(#a)"/>
+        <text class="lbl" x="777" y="188" text-anchor="middle">inputs</text>
+        <line class="edge-back" x1="820" y1="222" x2="737" y2="222" marker-end="url(#a)"/>
+        <text class="lbl" x="777" y="236" text-anchor="middle">draft</text>
+
+        <!-- Boundary note -->
+        <text class="lbl-hot" x="777" y="452" text-anchor="middle">only approved</text>
+        <text class="lbl-hot" x="777" y="466" text-anchor="middle">pages cross</text>
+
+        <!-- Railway -->
+        <rect class="box-hot" x="820" y="470" width="350" height="125" rx="10"/>
+        <text class="t" x="838" y="496">Railway · public host</text>
+        <text class="s" x="838" y="516">Caddy serves static files; no API, no uploads, no keys</text>
+        <text class="m" x="838" y="542">/p/&lt;slug&gt;/  index.html · page.md · claims.json</text>
+        <text class="m" x="838" y="562">/robots.txt  /sitemap.xml  /&lt;key&gt;.txt</text>
+        <text class="ms" x="838" y="582">sample pages: noindex header, never submitted</text>
+        <line class="edge-hot" x1="735" y1="530" x2="818" y2="530" marker-end="url(#ahot)"/>
+        <text class="lbl-hot" x="777" y="522" text-anchor="middle">bundle</text>
+        <line class="edge-back" x1="820" y1="572" x2="737" y2="572" marker-end="url(#a)"/>
+        <text class="lbl" x="777" y="588" text-anchor="middle">fetch back</text>
+
+        <!-- IndexNow -->
+        <rect class="box" x="820" y="630" width="225" height="74" rx="10"/>
+        <text class="t" x="838" y="656">IndexNow</text>
+        <text class="s" x="838" y="676">Bing, Yandex, Naver,</text>
+        <text class="s" x="838" y="693">Seznam, Yep</text>
+        <line class="edge" x1="735" y1="638" x2="818" y2="638" marker-end="url(#a)"/>
+        <text class="lbl" x="777" y="652" text-anchor="middle">URL + key</text>
+        <line class="edge" x1="935" y1="630" x2="935" y2="598" marker-end="url(#a)"/>
+        <text class="lbl" x="943" y="618">checks key file</text>
+
+        <!-- Crawlers -->
+        <rect class="box" x="820" y="725" width="350" height="75" rx="10"/>
+        <text class="t" x="838" y="751">AI and search crawlers</text>
+        <text class="m" x="838" y="771">Googlebot · OAI-SearchBot</text>
+        <text class="m" x="838" y="789">Claude-SearchBot · PerplexityBot</text>
+        <line class="edge" x1="1110" y1="725" x2="1110" y2="598" marker-end="url(#a)"/>
+        <text class="lbl" x="1118" y="650">crawl via</text>
+        <text class="lbl" x="1118" y="664">robots +</text>
+        <text class="lbl" x="1118" y="678">sitemap</text>
+      </svg>
+    </div>
+    <figcaption>Two kinds of data leave your machine. Audio and frames go to the model providers while a video is processed. After you approve a page, its static files go to the public host. The app reports a page as live only after it fetches every public file back and the bytes match what you approved.</figcaption>
+  </figure>
+
+  <div class="grid3">
+    <section>
+      <h2>What leaves the machine</h2>
+      <ul>
+        <li><b>Audio</b> to OpenAI for transcription.</li>
+        <li><b>Transcript and frames</b> to Anthropic for the draft.</li>
+        <li><b>Approved pages</b> to Railway as a static bundle.</li>
+        <li><b>The page URL</b> to IndexNow, with a key the host proves it owns.</li>
+        <li><b>Nothing else.</b> Keys, videos, and job data stay local.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Job states</h2>
+      <div class="states">
+        <span class="states-label">Processing</span>
+        <span class="state">queued</span><span class="arrow">→</span>
+        <span class="state">reading</span><span class="arrow">→</span>
+        <span class="state">listening</span><span class="arrow">→</span>
+        <span class="state">watching</span><span class="arrow">→</span>
+        <span class="state">writing</span><span class="arrow">→</span>
+        <span class="state">review</span><span class="arrow">→</span>
+        <span class="state">published</span>
+        <span class="states-label">Going live</span>
+        <span class="state">running</span><span class="arrow">→</span>
+        <span class="state hot">live</span><span class="arrow">or</span>
+        <span class="state">failed</span>
+      </div>
+      <ul>
+        <li>Editing a published page moves it back to <code>review</code>. The live copy stays as approved until you publish again.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>When something fails</h2>
+      <ul>
+        <li><b>Deploy rejected.</b> The page is not recorded as live, and Try again reruns the deploy.</li>
+        <li><b>Files don't match in 4 minutes.</b> The launch fails instead of guessing.</li>
+        <li><b>IndexNow refuses the key.</b> The page stays live and the submission shows as failed, with a retry.</li>
+        <li><b>App restarts mid-job.</b> Interrupted jobs are marked failed on startup, so nothing spins forever.</li>
+      </ul>
+    </section>
+  </div>
+</main>

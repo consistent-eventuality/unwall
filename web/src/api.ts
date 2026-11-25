@@ -65,6 +65,41 @@ export interface Job {
   meta: Meta
 }
 
+export interface EngineTally {
+  asked: number
+  searched: number
+  page_cited: number
+  post_cited: number
+  named: number
+  skipped: number
+  errors: number
+  note: string | null
+}
+
+export interface Check {
+  run_id: string
+  kind: 'baseline' | 'weekly' | 'manual'
+  at: string
+  label: string
+  questions: number
+  engines: Record<string, EngineTally>
+}
+
+export interface Results {
+  slug: string
+  checking: boolean
+  questions: string[]
+  fetches: { total: number; trusted: number; by_agent: Record<string, { total: number; confirmed: number; unconfirmable: number }> }
+  crawlers: Record<string, number>
+  referrals: Record<string, number>
+  clicks: number
+  visits: number
+  checks: Check[]
+  latest: { label: string; page_cited: number; asked: number; post_cited: number; named: number } | null
+  baseline: { page_cited: number; asked: number } | null
+  last_sync: { at: string; new_hits: number; errors: string[] } | null
+}
+
 export interface Sample {
   id: string
   title: string
@@ -104,6 +139,9 @@ export const api = {
   patch: (id: string, body: { draft?: Draft; meta?: Meta }) => request<Job>(`/api/jobs/${id}`, json('PATCH', body)),
   publish: (id: string) => request<Job>(`/api/jobs/${id}/publish`, json('POST', { consent: true })),
   launch: (id: string) => request<Job>(`/api/jobs/${id}/launch`, { method: 'POST' }),
+  results: (id: string) => request<Results>(`/api/jobs/${id}/results`),
+  check: (id: string) => request<Results>(`/api/jobs/${id}/check`, { method: 'POST' }),
+  sync: () => request<{ new_hits: number; requests: number; errors: string[] }>('/api/measure/sync', { method: 'POST' }),
   output: async (id: string, name: 'page.md' | 'claims.json') => {
     const response = await fetch(`/api/jobs/${id}/output/${name}`)
     if (!response.ok) throw new Error('Could not load this output.')

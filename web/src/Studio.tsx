@@ -161,6 +161,25 @@ export default function Studio({ job, onChange, onHome }: { job: Job; onChange: 
               </li>
             ))}
           </ol>
+
+          <div className="mt-10 flex items-baseline justify-between border-b border-line pb-3">
+            <h2 className="font-semibold">Questions to track</h2>
+            <span className="text-xs text-faint">Asked to AI engines after it goes live</span>
+          </div>
+          <p className="mt-3 text-sm leading-relaxed text-soft">After the page goes live, Unwall asks ChatGPT, Claude, and Perplexity these questions to see whether they cite it. Write them the way a person would ask.</p>
+          <ul className="mt-3">
+            <li className="flex gap-3 border-b border-line py-3 text-[15px]"><span className="w-16 shrink-0 font-mono text-xs leading-6 text-signal">Main</span><span className="min-w-0">{draft.question}</span></li>
+            {draft.related_questions.map((q, i) => (
+              <li key={i} className="group grid grid-cols-[64px_minmax(0,1fr)_24px] gap-3 border-b border-line py-3">
+                <span className="font-mono text-xs leading-6 text-faint">Also</span>
+                <input aria-label={`Tracked question ${i + 2}`} value={q} onChange={(e) => queue({ ...draft, related_questions: draft.related_questions.map((x, n) => (n === i ? e.target.value : x)) }, meta)} className="ghost-edit text-[15px]" />
+                <button aria-label={`Remove tracked question ${i + 2}`} onClick={() => queue({ ...draft, related_questions: draft.related_questions.filter((_, n) => n !== i) }, meta)} className="h-6 rounded text-faint opacity-60 transition hover:bg-bad/15 hover:text-bad group-hover:opacity-100">×</button>
+              </li>
+            ))}
+          </ul>
+          {draft.related_questions.length < 4 && (
+            <button onClick={() => queue({ ...draft, related_questions: [...draft.related_questions, ''] }, meta)} className="mt-3 text-sm font-medium text-signal hover:underline">+ Add a question</button>
+          )}
         </main>
 
         <aside className="lg:col-span-2 xl:sticky xl:top-23 xl:col-span-1 xl:self-start">

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api, type Job, type LaunchTarget } from './api'
 import { Logo } from './App'
+import Results from './Results'
 
 type View = 'page' | 'page.md' | 'claims.json'
 const VIEWS: { key: View; label: string; note: string }[] = [
@@ -139,6 +140,8 @@ export default function Published({ job, onEdit, onChange, onHome }: { job: Job;
               </ul>
             </div>
           )}
+
+          {isLive && !job.sample && <Results job={job} />}
 
           <dl className="mt-8 border-t border-line text-sm">
             {[

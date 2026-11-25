@@ -76,6 +76,30 @@ This creates an `unwall-pages` project and writes `data/host.json`. **Publish li
 
 Without a host, pages are still built locally at `/p/<slug>/`.
 
+## Measurement
+
+Does a published page get used, cited, and send people to the creator? Unwall answers three questions per page:
+
+| Question | Evidence | How |
+|---|---|---|
+| Is AI using it? | Crawler visits, and AI tools fetching the page for someone's question (ChatGPT-User, Claude-User, Perplexity-User) | The host writes a JSON access log. `scripts/measure.py sync` pulls it from every Railway deployment and checks each bot against its operator's published IP ranges. IPs are dropped after the check. |
+| Is AI citing it? | Which sources ChatGPT, Claude, and Perplexity cite when asked the page's questions | A baseline runs right after the page goes live. `scripts/measure.py check` repeats the same questions weekly. Each engine is told to search first, and every answer records whether it searched. |
+| Is it sending people? | Visits that arrive from an AI app, and clicks on "Watch the original" | Visible links go through `/go/<slug>`, which redirects to the post and lands in the log. |
+
+The studio has a **Questions to track** list. The published screen shows results, and a creator report is at `/report/<job id>`. Perplexity needs `PERPLEXITY_API_KEY`; without it, Perplexity is skipped.
+
+```bash
+python scripts/measure.py sync      # daily
+python scripts/measure.py check     # weekly, for pages that are due
+python scripts/measure.py report
+```
+
+Limits:
+- API answers can differ from the ChatGPT, Claude, and Perplexity apps.
+- Anthropic publishes no crawler IP ranges, so Claude visits can't be confirmed.
+- Some apps hide where a visitor came from, so referral counts are a minimum.
+- Railway keeps logs for a limited time, so run the sync daily.
+
 ## Tests
 
 ```bash

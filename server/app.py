@@ -17,7 +17,7 @@ from fastapi.responses import FileResponse, PlainTextResponse, Response, Streami
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ValidationError
 
-from . import golive, pipeline, render
+from . import citations, evidence, golive, pipeline, render, results
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA = Path(os.environ.get("UNWALL_DATA", ROOT / "data"))
@@ -207,6 +207,9 @@ def is_web_url(value: str) -> bool:
     return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
 
 
+CHECK_ENGINES: dict | None = None  # None means the real engines; tests swap in fakes.
+
+
 def launching(job: dict) -> bool:
     return (job.get("launch") or {}).get("state") == "running"
 
@@ -220,6 +223,10 @@ def launch_worker(job_id: str, host: dict) -> None:
     try:
         result = golive.launch(load(job_id), JOBS / job_id, DATA, host, lambda name: update(step=name))
         update(state="live", step="done", error=None, **result)
+        job = load(job_id)
+        # The baseline is asked once, right after the page first goes live, before any index has it.
+        if not job.get("sample") and os.environ.get("UNWALL_BASELINE", "1") != "0" and not citations.runs_for(DATA, job["slug"]):
+            citations.start_background(job, DATA, "baseline", CHECK_ENGINES)
     except golive.LaunchError as exc:
         update(state="failed", error=str(exc))
     except Exception:
@@ -255,6 +262,8 @@ def publish(job_id: str, body: PublishBody) -> dict:
         problems.append("Add the creator's name.")
     if not is_web_url(meta["source_url"]):
         problems.append("Add a valid link to the original video.")
+    elif not render.safe_link(meta["source_url"]):
+        problems.append("The original video link can't contain spaces, quotes, or braces.")
     if meta.get("profile_url") and not is_web_url(meta["profile_url"]):
         problems.append("Use a valid profile link.")
     if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", meta["posted_date"]):
@@ -286,6 +295,38 @@ def retry_launch(job_id: str) -> dict:
         raise HTTPException(409, "This page is already going live.")
     start_launch(job)
     return load(job_id)
+
+
+def live_page(job_id: str) -> dict:
+    job = load(job_id)
+    if (job.get("launch") or {}).get("state") != "live":
+        raise HTTPException(409, "Results start once the page is live.")
+    return job
+
+
+@app.get("/api/jobs/{job_id}/results")
+def get_results(job_id: str) -> dict:
+    return results.summary(live_page(job_id), DATA)
+
+
+@app.post("/api/jobs/{job_id}/check")
+def check_now(job_id: str) -> dict:
+    job = live_page(job_id)
+    if job.get("sample"):
+        raise HTTPException(409, "Sample pages aren't indexed, so there's nothing to check.")
+    if not citations.questions(job):
+        raise HTTPException(409, "Add at least one question to track.")
+    if not citations.start_background(job, DATA, "manual", CHECK_ENGINES):
+        raise HTTPException(409, "A check is already running for this page.")
+    return results.summary(job, DATA)
+
+
+@app.post("/api/measure/sync")
+def sync_visits() -> dict:
+    host = golive.host_config(DATA)
+    if not host:
+        raise HTTPException(409, "Connect a public host first.")
+    return evidence.sync(DATA, host)
 
 
 @app.get("/api/jobs/{job_id}/output/{name}")
@@ -350,6 +391,26 @@ def robots() -> str:
 @app.get("/sitemap.xml")
 def sitemap() -> Response:
     return Response(render.sitemap(SITE, BASE_URL), media_type="application/xml")
+
+
+@app.get("/report/{job_id}", include_in_schema=False)
+def report(job_id: str):
+    job = live_page(job_id)
+    return Response(render.report_html(job, results.summary(job, DATA)), media_type="text/html")
+
+
+@app.get("/go/{slug}", include_in_schema=False)
+def go(slug: str):
+    """Local twin of the public host's redirect, so page previews behave the same."""
+    if not re.fullmatch(r"[a-z0-9-]+", slug):
+        raise HTTPException(404)
+    claims = SITE / slug / "claims.json"
+    if not claims.exists():
+        raise HTTPException(404)
+    target = json.loads(claims.read_text())["source_url"]
+    if not render.safe_link(target):
+        raise HTTPException(404)
+    return Response(status_code=302, headers={"Location": target})
 
 
 app.mount("/p", StaticFiles(directory=SITE, html=True), name="pages")
